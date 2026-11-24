@@ -46,31 +46,34 @@ export interface Params {
 }
 
 export const DEFAULT_PARAMS: Params = {
-  windowSlots: 40,
-  minAgeSlots: 300,
-  minRealSol: 2,
+  // Iteration 2 (after dev grade 1: net PnL -6.73 SOL, drawdown 74%, win rate 10%):
+  // entries were far too loose and size too big. Everything tightens: older curves,
+  // much stronger and broader inflow, smaller stakes, faster exits, one entry per mint.
+  windowSlots: 30,
+  minAgeSlots: 800,
+  minRealSol: 5,
   maxRealSol: 70,
-  minNetInSol: 0.8,
-  minBuyTrades: 4,
-  minDistinctBuyers: 4,
-  minRise: 0.03,
-  maxRise: 1.2,
-  nearHighShare: 0.92,
-  firstBuySol: 0.04,
-  addBuySol: 0.15,
-  maxStakeSol: 1.2,
-  maxExposureSol: 5,
-  stopLossShare: 0.18,
-  trailArmShare: 0.05,
-  trailShare: 0.22,
+  minNetInSol: 4,
+  minBuyTrades: 12,
+  minDistinctBuyers: 10,
+  minRise: 0.08,
+  maxRise: 0.8,
+  nearHighShare: 0.95,
+  firstBuySol: 0.03,
+  addBuySol: 0.1,
+  maxStakeSol: 0.8,
+  maxExposureSol: 2.5,
+  stopLossShare: 0.1,
+  trailArmShare: 0.1,
+  trailShare: 0.2,
   fadeWindowSlots: 15,
   fadeNetSol: 1.5,
-  maxHoldSlots: 1200,
-  cooldownSlots: 200,
-  maxEntriesPerMint: 2,
+  maxHoldSlots: 900,
+  cooldownSlots: 1000,
+  maxEntriesPerMint: 1,
   probeSol: 0.011,
-  probeTargetCoins: 26,
-  probePaceSecs: 14_400,
+  probeTargetCoins: 22,
+  probePaceSecs: 80_000,
 };
 
 const LAMPORTS = 1e9;
@@ -129,6 +132,10 @@ export function createStrategy(p: Params = DEFAULT_PARAMS): Bot {
   }
 
   function entryLooksGood(tape: Tape, now: number, realSol: number): boolean {
+    // Iteration 5: back to the v3 momentum signal (best dev PnL of the first
+    // round), with the conviction bar raised hard so far fewer round trips pay
+    // the curve fee, and exits made asymmetric in the exit block's parameters:
+    // tight stop, loose trailing stop so the right tail can run.
     if (realSol < p.minRealSol || realSol > p.maxRealSol) return false;
     if (tape.createdSlot === null || now - tape.createdSlot < p.minAgeSlots) return false;
     const from = now - p.windowSlots;
@@ -310,7 +317,7 @@ export function createStrategy(p: Params = DEFAULT_PARAMS): Bot {
 
       // 4) Guardrail probes, paced by block time so the distinct-coin count is
       // reached steadily instead of in one late burst.
-      if (probes.size === 0 && openSlots > 0 && firstBlockTime !== null && lastBlockTime !== null && orders.length < orderCap) {
+      if (probes.size === 0 && positions.size === 0 && openSlots > 0 && firstBlockTime !== null && lastBlockTime !== null && orders.length < orderCap) {
         const elapsedShare = Math.min(1, (lastBlockTime - firstBlockTime) / p.probePaceSecs);
         const coinsDue = Math.ceil(p.probeTargetCoins * elapsedShare);
         if (probedCoins.size < coinsDue) {
